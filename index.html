@@ -17,10 +17,9 @@
             background-color: #f0f4f8;
             color: #333;
         }
-        h1 {
+        h1, h2 {
             color: #2c3e50;
             text-align: center;
-            margin-bottom: 20px;
         }
         textarea {
             width: 100%;
@@ -120,6 +119,9 @@
     <textarea id="journalEntry" placeholder="Write your journal entry here..."></textarea>
     <button id="saveEntry" onclick="saveEntry()">Save Entry</button>
     <button id="downloadEntries" onclick="downloadEntries()">Download Entries</button>
+    <h2>Today's Entry</h2>
+    <div id="todayEntry"></div>
+    <h2>Previous Entries</h2>
     <div id="entryList"></div>
 
     <script>
@@ -154,19 +156,22 @@
                     journalEntries[date] = { entries: [], mood: selectedMood, energy: selectedEnergy };
                 }
                 
-                journalEntries[date].entries.push({ time, entry, mood: selectedMood, energy: selectedEnergy });
-                journalEntries[date].mood = selectedMood; // Update mood for the day
-                journalEntries[date].energy = selectedEnergy; // Update energy for the day
+                journalEntries[date].entries.push({ time, entry });
+                journalEntries[date].mood = selectedMood;
+                journalEntries[date].energy = selectedEnergy;
                 
                 localStorage.setItem('journalEntries', JSON.stringify(journalEntries));
-                document.getElementById('journalEntry').value = '';
                 displayEntries();
             }
         }
 
         function displayEntries() {
+            const todayEntry = document.getElementById('todayEntry');
             const entryList = document.getElementById('entryList');
             const journalEntries = JSON.parse(localStorage.getItem('journalEntries') || '{}');
+            const today = new Date().toISOString().split('T')[0];
+            
+            todayEntry.innerHTML = '';
             entryList.innerHTML = '';
             
             Object.entries(journalEntries).reverse().forEach(([date, dayEntry]) => {
@@ -174,18 +179,27 @@
                 entryDiv.className = 'entry';
                 let entriesHtml = dayEntry.entries.map(e => `
                     <p>
-                        <em>${e.time}</em> - Mood: ${['😢', '😕', '😐', '🙂', '😄'][e.mood - 1]} 
-                        Energy: ${getEnergyIcon(e.energy)}
-                        <br>${e.entry}
+                        <em>${e.time}</em><br>
+                        ${e.entry}
                     </p>
                 `).join('');
                 
                 entryDiv.innerHTML = `
                     <button class="delete-btn" onclick="deleteEntry('${date}')">Delete</button>
                     <strong>${date}</strong>
+                    <p>Mood: ${['😢', '😕', '😐', '🙂', '😄'][dayEntry.mood - 1]} 
+                    Energy: ${getEnergyIcon(dayEntry.energy)}</p>
                     ${entriesHtml}
                 `;
-                entryList.appendChild(entryDiv);
+                
+                if (date === today) {
+                    todayEntry.appendChild(entryDiv);
+                    document.getElementById('journalEntry').value = dayEntry.entries.map(e => e.entry).join('\n\n');
+                    selectMood(dayEntry.mood);
+                    selectEnergy(dayEntry.energy);
+                } else {
+                    entryList.appendChild(entryDiv);
+                }
             });
         }
 
@@ -200,15 +214,12 @@
 
         function downloadEntries() {
             const journalEntries = JSON.parse(localStorage.getItem('journalEntries') || '{}');
-            const data = Object.entries(journalEntries).flatMap(([date, dayEntry]) => 
-                dayEntry.entries.map(entry => ({
-                    Date: date,
-                    Time: entry.time,
-                    Mood: ['Very Sad', 'Sad', 'Neutral', 'Happy', 'Very Happy'][entry.mood - 1],
-                    Energy: entry.energy,
-                    Entry: entry.entry
-                }))
-            );
+            const data = Object.entries(journalEntries).map(([date, dayEntry]) => ({
+                Date: date,
+                Mood: dayEntry.mood,
+                Energy: dayEntry.energy,
+                Entry: dayEntry.entries.map(e => `[${e.time}] ${e.entry}`).join('\n\n')
+            }));
             
             const ws = XLSX.utils.json_to_sheet(data);
             const wb = XLSX.utils.book_new();
@@ -227,8 +238,6 @@
 
         // Display entries when the page loads
         displayEntries();
-        selectMood(3); // Set default mood
-        selectEnergy(3); // Set default energy
     </script>
 </body>
 </html>
